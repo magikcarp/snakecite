@@ -1,0 +1,30 @@
+[project]
+name = "snakecite"
+version = "0.1.0"
+description = "Autogenerate citations for Snakemake dependencies"
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+] 
+authors = [
+    {name = "magikcarp", email = "pike.amc@gmail.com"},
+]
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
+
+[project.scripts]
+snakecite = "snakecite.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/magikcarp/snakcite"
+Issues = "https://github.com/magikcarp/snakcite/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
