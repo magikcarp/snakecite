@@ -22,7 +22,7 @@ directories of yaml files from Snakemake workflows.
 ## Installation
 For the most up-to-date version, use pipx to install the Github repository.
 ```
-git clone TODO ADD GH REPO
+git clone https://github.com/magikcarp/snakecite
 cd snakecite
 pipx install . snakecite
 ```

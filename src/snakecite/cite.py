@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-Provides the ability to produce citations for DOI or Github rpositories for
+Provides the ability to produce citations for DOI or Github repositories for
 software enumerated as dependencies for a Snakemake workflow. 
 """
 
@@ -10,11 +10,10 @@ import json
 import urllib.request
 from urllib.parse import urlparse
 import re
-import sys
 from time import sleep, time
 
 
-def is_url(url: str) -> bool:
+def is_url(url: str) -> bool: # TODO improve logic
     """ Checks if URL is valid. """
     try:
         result = urlparse(url)
@@ -23,7 +22,7 @@ def is_url(url: str) -> bool:
         return False
 
 
-def is_doi_url(doi: str) -> bool:
+def is_doi_url(doi: str) -> bool: # TODO improve logic
     """ Checks if provided DOI URL is valid. """
     doi_regex = r"https?://doi\.org/10\.\d{4,9}/[-._;()/:A-Za-z0-9]+" # 99.3% accuracy per Crossref 
     if re.match(doi_regex, doi):
@@ -32,7 +31,7 @@ def is_doi_url(doi: str) -> bool:
         return False
     
 
-def is_github_repo(repo_url: str) -> bool:
+def is_github_repo(repo_url: str) -> bool: # TODO improve logic
     """ Checks if provided URL is valid Github repo. """
     github_regex = r"https?://github\.com/[\w\-]+/[\w\-]+"
     if re.match(github_regex, repo_url):
@@ -41,57 +40,11 @@ def is_github_repo(repo_url: str) -> bool:
         return False
 
 
-def search_for_doi_or_github(url: str) -> str | None: 
-    """ Searches page for URL, either DOI or Github repository, for citation.
-
-    Args:
-        url (str): page to be searched.
-
-    Returns:
-        (str | None): valid citable URL, None if no link is found or HTTPError.
-    """
-    doi_re = r"(https?://)?(doi\.org/)?(10\.\d{4,9}/[-._;()/:A-Za-z0-9]+[0-9])"
-    github_re = r"(https?://github\.com/[\w\-]+/[\w\-]+)"
-    try: 
-        with urllib.request.urlopen(url) as response:
-            data = response.read().decode("utf-8")
-            if (doi := re.search(doi_re, data)):
-                return "https://doi.org/" + doi.group(3)
-            elif (gh := re.search(github_re, data)):
-                return gh.group(1)
-            else:
-                return None
-    except urllib.request.HTTPError:
-        return None
-
-
-def search_repositories(dependency: str) -> str | None: 
-    """
-    Obtains the URL for DOI or Github repository for dependency for citation on 
-    PyPI, Bioconda, and Anaconda. 
-
-    Args:
-        dependency (str): name of the dependency
-
-    Returns:
-        (str | None): URL if located, otherwise None. 
-    """
-    if url := search_for_doi_or_github(f"https://pypi.org/pypi/{dependency}/json"):
-        return url
-    elif url := search_for_doi_or_github(f"https://bioconda.github.io/recipes/{dependency}/README.html"):
-        return url
-    elif url := search_for_doi_or_github(f"https://anaconda.org/conda-forge/{dependency}"):
-        return url
-    else:
-        sys.stderr.write(f"No available links for {dependency}\n")
-        return None
-
-
 def _query_github_api(
     api_request: urllib.request.Request,
     max_retries: int=3,
     max_wait: int=60,
-) -> dict | None:
+) -> dict:
     """
     Returns decoded data from a Github API request with the ability to retry
     when the connection fails or request to retry after a certain period. 
@@ -109,8 +62,11 @@ def _query_github_api(
             Default of 60 (one minute). 
 
     Returns:
-        (dict | None) Returns the decoded request, or None if maximum number of
-            retries is met.
+        dict: Returns the decoded Github API request as a json object
+
+    Raises:
+        urllib.request.HTTPError: received unexpected status code
+        Exception: issue with timeout or used max retries
     """
     for nth_try in range(max_retries):
         try:
@@ -121,26 +77,24 @@ def _query_github_api(
                 case 403 | 429:
                     if 'retry_after' in e.headers:
                          if max_wait < e.headers['retry_after']:
-                             return None
+                            Exception(f"Timeout from {api_request.full_url}")
                          sleep(e.headers(e.headers['retry_after'] + 1)) # +1 just in case
                     elif e.headers['X-RateLimit-Remaining'] == 0:
                         wait_length = e.headers['X-RateLimit-Reset'] - time()
                         if max_wait < wait_length:
-                            return None
+                            Exception(f"Timeout from {api_request.full_url}")
                     else:
                         sleep(60 * (nth_try + 1))
-                case 404:
-                    return None
                 case _:
-                    continue # idk, retry
-    return None
+                    raise e
+    raise Exception(f"Unable to retrieve info from {api_request.full_url}")
 
 
 def get_repo_authors(
     repo_url: str,
     token: str=None,
     filter_bot: bool=True,
-) -> list[str] | None:
+) -> list[str]:
     """
     Uses Github API to retrieve list of authors for a given repository. 
 
@@ -152,8 +106,12 @@ def get_repo_authors(
             default. 
     
     Returns:
-        (list[str] | None): list of author names or usernames, None if unable
-            to retrieve list of authors. 
+        list[str]: list of author names or usernames
+
+    Raises:
+        urllib.request.HTTPError: unexpected status code when querying for 
+            initial author list
+        Exception: issue with timeout or used max retries requesting author list 
     """
     repo = re.search(r'https?://github\.com/([\w\-]+/[\w\-]+)', repo_url).group(1)
 
@@ -167,19 +125,17 @@ def get_repo_authors(
         headers=headers
     )
     
-    authors_api_list = _query_github_api(contrib_req)
-    if not authors_api_list:
-        return None
+    authors_api_list = _query_github_api(contrib_req) # can error
 
     author_names = []
     for author in authors_api_list:
         author_username = author["login"]
-        author_request = urllib.request.Request(author["url"], headers=headers)
-        author_data = _query_github_api(author_request)
-        if author_data:
+        author_request = urllib.request.Request(author["url"], headers=headers) 
+        try:
+            author_data = _query_github_api(author_request)
             author_name = author_data["name"]
             author_names.append(author_name if author_name else author_username)
-        else:
+        except:
             author_names.append(author_username)
 
     if filter_bot:
@@ -188,7 +144,7 @@ def get_repo_authors(
     return author_names
 
 
-def cite_github_repo(repo_url: str, token: str=None) -> str | None:
+def cite_github_repo(repo_url: str, token: str=None) -> str:
     """
     Generates citation for Python package using Github repository. 
 
@@ -197,11 +153,15 @@ def cite_github_repo(repo_url: str, token: str=None) -> str | None:
         token (str, optional): Github token to increase number of API calls.
 
     Returns:
-        (str | None): Bibtex citation for the Python package.
+        str: Bibtex citation for the Python package.
+
+    Raises:
+        urllib.request.HTTPError: unexpected status code when querying for
+            authors or most recent publication date.
+        Exception: issue with timeout or used max retries when querying for
+            the same listed above.
     """
-    authors = get_repo_authors(repo_url, token)
-    if not authors:
-        return None # could consider citing without authors
+    authors = get_repo_authors(repo_url, token) # TODO consider implementing option to generate citation w/o authors
     
     mch = re.search(r'https?://github\.com/([\w\-]+/([\w\-]+))', repo_url)
     repo_loc = mch.group(1)
@@ -216,9 +176,7 @@ def cite_github_repo(repo_url: str, token: str=None) -> str | None:
         f"https://api.github.com/repos/{repo_loc}",
         headers=headers
     )
-    repo_data = _query_github_api(request)
-    if not repo_data:
-        return None
+    repo_data = _query_github_api(request) # TODO allow for version specification, retrieve appropriate date if available
     pub_year = repo_data["updated_at"][:4]
         
     return f"""@misc{{{repo_name.lower()}, 
@@ -230,7 +188,7 @@ def cite_github_repo(repo_url: str, token: str=None) -> str | None:
 }}"""
 
 
-def get_doi_bibtex(doi_url: str) -> str | None:
+def get_doi_bibtex(doi_url: str) -> str:
     """
     Produces Bibtex citation for given DOI URL.
 
@@ -238,26 +196,68 @@ def get_doi_bibtex(doi_url: str) -> str | None:
         doi_url (str): DOI for article to be cited. 
 
     Returns:
-        (str | None): Bibtex citation for DOI, None if error. 
+        str: Bibtex citation for DOI. 
+
+    Raises:
+        urllib.request.HTTPError: Non 200 status code. 
     """
     r = urllib.request.Request(doi_url, headers={"Accept": "application/x-bibtex"})
+    with urllib.request.urlopen(r) as response:
+        return response.read().decode("utf-8")
+
+
+def search_for_doi_or_github(url: str) -> str | None: 
+    """ Searches page for URL, either DOI or Github repository, for citation.
+
+    Args:
+        url (str): page to be searched.
+
+    Returns:
+        str | None: valid citable URL, None if no link is found on the page.
+
+    Raises:
+        urllib.request.HTTPError: Non 200 status code when requesting page
+            contents. 
+    """
+    doi_re = r"(https?://)?(doi\.org/)?(10\.\d{4,9}/[-._;()/:A-Za-z0-9]+[0-9])" # 99.3% accuracy per Crossref 
+    github_re = r"(https?://github\.com/[\w\-]+/[\w\-]+)"
+    with urllib.request.urlopen(url) as response:
+        data = response.read().decode("utf-8")
+        if (doi := re.search(doi_re, data)):
+            return "https://doi.org/" + doi.group(3)
+        elif (gh := re.search(github_re, data)):
+            return gh.group(1)
+        else:
+            return None
+
+
+def search_repositories(dependency: str) -> str | None: # TODO update logic for exceptions
+    """
+    Obtains the URL for DOI or Github repository for dependency for citation on 
+    PyPI, Bioconda, and Anaconda. 
+
+    Args:
+        dependency (str): name of the dependency
+
+    Returns:
+        (str | None): URL if located, otherwise None. 
+    """
+    try: 
+        if url := search_for_doi_or_github(f"https://pypi.org/pypi/{dependency}/json"):
+            return url
+    except:
+        pass
     try:
-        with urllib.request.urlopen(r) as response:
-            return response.read().decode("utf-8")
-    except urllib.request.HTTPError:
-        return None
-
-
-def find_and_cite(url: str) -> str | None:
-    link_found = search_for_doi_or_github(url)
-    if not link_found:
-        return None
-    if is_doi_url(link_found):
-        return get_doi_bibtex(link_found)
-    elif is_github_repo(link_found):
-        return cite_github_repo(link_found)
-    else:
-        return None
+        if url := search_for_doi_or_github(f"https://bioconda.github.io/recipes/{dependency}/README.html"):
+            return url
+    except:
+        pass
+    try: 
+        if url := search_for_doi_or_github(f"https://anaconda.org/conda-forge/{dependency}"):
+            return url
+    except:
+        pass
+    return None
 
 
 def extract_dependencies_from_file(filepath: str) -> list[str]:
@@ -285,6 +285,7 @@ def extract_dependencies_from_yaml(filepath: str) -> list[str]:
                 library = hit.group(1)
                 deps.append(library)
     return deps
+
 
 def extract_dependencies_from_txt(filepath: str) -> list[str]:
     deps = []
