@@ -28,7 +28,7 @@ class TestURLs(unittest.TestCase):
         self.assertTrue(cite.is_url("https://pypi.org/"))
 
     def test_is_url_google_no_http(self):
-        self.assertTrue(cite.is_url("www.google.com"))
+        self.assertFalse(cite.is_url("www.google.com"))
 
     def test_is_url_int(self):
         self.assertFalse(cite.is_url(45))
@@ -41,19 +41,19 @@ class TestURLs(unittest.TestCase):
 
     # testing cite.is_doi_url
     def test_is_doi_url_success(self):
-        self.assertTrue("https://doi.org/10.1093/bioinformatics/bts480")
+        self.assertTrue(cite.is_doi_url("https://doi.org/10.1093/bioinformatics/bts480"))
 
     def test_is_doi_url_success_http(self):
-        self.assertTrue("http://doi.org/10.1093/bioinformatics/bts480")    
+        self.assertTrue(cite.is_doi_url("http://doi.org/10.1093/bioinformatics/bts480"))
 
-    def test_is_doi_url_success_no_http(self):
-        self.assertTrue("doi.org/10.1093/bioinformatics/bts480")
+    def test_is_doi_url_no_http(self):
+        self.assertFalse(cite.is_doi_url("doi.org/10.1093/bioinformatics/bts480"))
 
     def test_is_doi_url_just_DOI_number(self):
-        self.assertFalse("10.1093/bioinformatics/bts480")
+        self.assertFalse(cite.is_doi_url("10.1093/bioinformatics/bts480"))
 
     def test_is_doi_url_google(self):
-        self.assertFalse("https://www.google.com")
+        self.assertFalse(cite.is_doi_url("https://www.google.com"))
 
     def test_is_doi_url_int(self):
         self.assertFalse(cite.is_doi_url(45))
@@ -66,16 +66,16 @@ class TestURLs(unittest.TestCase):
 
     # testing cite.is_github_repo
     def test_is_github_repo_success(self):
-        self.assertTrue("https://github.com/magikcarp/snakecite")
+        self.assertTrue(cite.is_github_repo("https://github.com/magikcarp/snakecite"))
 
     def test_is_github_repo_success_http(self):
-        self.assertTrue("http://github.com/magikcarp/snakecite")    
+        self.assertTrue(cite.is_github_repo("http://github.com/magikcarp/snakecite"))
 
-    def test_is_github_repo_success_no_http(self):
-        self.assertTrue("github.com/magikcarp/snakecite")
+    def test_is_github_repo_fail_no_http(self):
+        self.assertFalse(cite.is_github_repo("github.com/magikcarp/snakecite"))
 
     def test_is_github_repo_google(self):
-        self.assertFalse("https://www.google.com")
+        self.assertFalse(cite.is_github_repo("https://www.google.com"))
 
     def test_is_github_repo_int(self):
         self.assertFalse(cite.is_github_repo(45))

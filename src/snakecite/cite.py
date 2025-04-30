@@ -13,8 +13,12 @@ import re
 from time import sleep, time
 
 
-def is_url(url: str) -> bool: # TODO improve logic
-    """ Checks if URL is valid. """
+def is_url(url: str) -> bool: 
+    """
+    Checks if URL is valid. Does not check if URL exists.
+    """
+    if not isinstance(url, str):
+        return False
     try:
         result = urlparse(url)
         return all([result.scheme, result.netloc])
@@ -22,8 +26,12 @@ def is_url(url: str) -> bool: # TODO improve logic
         return False
 
 
-def is_doi_url(doi: str) -> bool: # TODO improve logic
-    """ Checks if provided DOI URL is valid. """
+def is_doi_url(doi: str) -> bool: 
+    """ 
+    Checks if provided DOI URL is valid. Does not check if URL exists.
+    """
+    if not is_url(doi):
+        return False
     doi_regex = r"https?://doi\.org/10\.\d{4,9}/[-._;()/:A-Za-z0-9]+" # 99.3% accuracy per Crossref 
     if re.match(doi_regex, doi):
         return True
@@ -31,8 +39,12 @@ def is_doi_url(doi: str) -> bool: # TODO improve logic
         return False
     
 
-def is_github_repo(repo_url: str) -> bool: # TODO improve logic
-    """ Checks if provided URL is valid Github repo. """
+def is_github_repo(repo_url: str) -> bool: 
+    """ 
+    Checks if provided URL is valid Github repo but does not check if it exists.
+    """
+    if not is_url(repo_url):
+        return False
     github_regex = r"https?://github\.com/[\w\-]+/[\w\-]+"
     if re.match(github_regex, repo_url):
         return True
